@@ -1,0 +1,5 @@
+# pi runtime data (auto-generated, do not commit)
+.pi/
+
+# Node
+node_modules/

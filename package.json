@@ -1,0 +1,14 @@
+{
+    "name": "pi-peer-network",
+    "version": "1.0.0",
+    "private": true,
+    "keywords": ["extensions"],
+    "scripts": {
+        "test": "node peer-network.test.js",
+    "test:int": "node peer-network.int.test.mjs",
+    "test:all": "npm test && npm run test:int"
+    },
+    "pi": {
+        "extensions": ["./extensions/peer-network.ts"]
+    }
+}
