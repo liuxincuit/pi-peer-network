@@ -253,6 +253,76 @@ function testEndToEnd() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  配置管理模块测试
+// ═══════════════════════════════════════════════════════
+
+function testConfig() {
+  console.log("\n## 6. 配置管理");
+  resetEnv();
+
+  const BASE_DIR = path.join(ROOT, "pi-peer-network");
+  const SETTING_FILE = path.join(BASE_DIR, "setting.json");
+  const DEFAULT_SETTING = { dataDir: "~/.pi/pi-peer-network" };
+
+  // 6.1 首次加载自动生成默认配置
+  function loadConfig() {
+    try {
+      const raw = fs.readFileSync(SETTING_FILE, "utf-8");
+      const cfg = JSON.parse(raw);
+      if (typeof cfg.dataDir === "string") return { dataDir: cfg.dataDir };
+      fs.writeFileSync(SETTING_FILE, JSON.stringify(DEFAULT_SETTING, null, 2), "utf-8");
+      return { ...DEFAULT_SETTING };
+    } catch {
+      fs.mkdirSync(BASE_DIR, { recursive: true });
+      fs.writeFileSync(SETTING_FILE, JSON.stringify(DEFAULT_SETTING, null, 2), "utf-8");
+      return { ...DEFAULT_SETTING };
+    }
+  }
+
+  // 清除配置，模拟首次加载
+  try { fs.rmSync(BASE_DIR, { recursive: true }); } catch {}
+  const cfg1 = loadConfig();
+  assert(cfg1.dataDir === "~/.pi/pi-peer-network", "首次加载生成默认配置");
+  assert(fs.existsSync(SETTING_FILE), "setting.json 文件已创建");
+
+  // 6.2 已有配置时不覆写
+  fs.writeFileSync(SETTING_FILE, JSON.stringify({ dataDir: "/custom/path" }, null, 2));
+  const cfg2 = loadConfig();
+  assert(cfg2.dataDir === "/custom/path", "已有配置时读取现有值");
+
+  // 6.3 配置损坏时回退默认
+  fs.writeFileSync(SETTING_FILE, "not-json");
+  const cfg3 = loadConfig();
+  assert(cfg3.dataDir === "~/.pi/pi-peer-network", "损坏配置回退默认");
+
+  // 6.4 config 缺少 dataDir 字段时回退
+  fs.writeFileSync(SETTING_FILE, JSON.stringify({}, null, 2));
+  const cfg4 = loadConfig();
+  assert(cfg4.dataDir === "~/.pi/pi-peer-network", "缺少 dataDir 字段回退默认");
+
+  // 6.5 resolveDataDir
+  function resolveDataDir(config) {
+    const dir = config.dataDir;
+    if (path.isAbsolute(dir)) return dir;
+    if (dir.startsWith("~")) return path.join(os.homedir(), dir.slice(1));
+    return path.join(BASE_DIR, dir);
+  }
+
+  const resolved1 = resolveDataDir({ dataDir: "/data/pi" });
+  assert(resolved1 === "/data/pi", "绝对路径直接使用");
+
+  const resolved2 = resolveDataDir({ dataDir: "~/my-data" });
+  assert(resolved2 === path.join(os.homedir(), "/my-data"), "~ 替换为 homedir");
+
+  const resolved3 = resolveDataDir({ dataDir: "custom/data" });
+  assert(resolved3 === path.join(BASE_DIR, "custom/data"), "相对路径相对于 BASE_DIR");
+
+  // 6.6 默认 dataDir 解析
+  const resolved4 = resolveDataDir(cfg1);
+  assert(resolved4 === path.join(os.homedir(), ".pi", "pi-peer-network"), "默认值解析正确");
+}
+
+// ═══════════════════════════════════════════════════════
 //  运行
 // ═══════════════════════════════════════════════════════
 
@@ -261,6 +331,7 @@ testHeartbeatAndOffline();
 testMessageFormat();
 testMailboxPoll();
 testEndToEnd();
+testConfig();
 
 // 清理
 try { fs.rmSync(ROOT, { recursive: true }); } catch {}
