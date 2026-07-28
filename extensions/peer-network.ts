@@ -6,14 +6,47 @@ import * as os from "node:os";
 
 // ── 配置常量 ──────────────────────────────────────────
 
-const PI_DIR = path.join(os.homedir(), ".pi");
-const PEERS_FILE = path.join(PI_DIR, "peers.json");
-const MAILBOX_DIR = path.join(PI_DIR, "mailbox");
+const BASE_DIR = path.join(os.homedir(), ".pi", "pi-peer-network");
+const SETTING_FILE = path.join(BASE_DIR, "setting.json");
+
+const DEFAULT_SETTING = { dataDir: "~/.pi/pi-peer-network" };
+
+let _configDataDir = ""; // 解析后的 dataDir，扩展初始化时设置
+
+let PEERS_FILE = "";
+let MAILBOX_DIR = "";
 
 const HEARTBEAT_MS = 60_000; // 60 秒心跳
 const POLL_MS = 1_000; // 1 秒轮询信箱
 const OFFLINE_MS = 120_000; // 2 分钟无心跳判离线
 const PEER_TIMEOUT_MS = 30_000; // peer_ask 等待回答超时
+
+// ═══════════════════════════════════════════════════════
+//  配置管理
+// ═══════════════════════════════════════════════════════
+
+function loadConfig(): { dataDir: string } {
+  try {
+    const raw = fs.readFileSync(SETTING_FILE, "utf-8");
+    const cfg = JSON.parse(raw);
+    if (typeof cfg.dataDir === "string") return { dataDir: cfg.dataDir };
+    // dataDir 字段缺失或非字符串，用默认值
+    fs.writeFileSync(SETTING_FILE, JSON.stringify(DEFAULT_SETTING, null, 2), "utf-8");
+    return { ...DEFAULT_SETTING };
+  } catch {
+    // 文件不存在或解析失败，创建默认配置
+    fs.mkdirSync(BASE_DIR, { recursive: true });
+    fs.writeFileSync(SETTING_FILE, JSON.stringify(DEFAULT_SETTING, null, 2), "utf-8");
+    return { ...DEFAULT_SETTING };
+  }
+}
+
+function resolveDataDir(config: { dataDir: string }): string {
+  const dir = config.dataDir;
+  if (path.isAbsolute(dir)) return dir;
+  if (dir.startsWith("~")) return path.join(os.homedir(), dir.slice(1));
+  return path.join(BASE_DIR, dir);
+}
 
 // ── 全局状态（在 default export 中初始化）───────────────
 
@@ -239,6 +272,12 @@ function stopHeartbeat(): void {
 
 export default function (pi: ExtensionAPI) {
   _pi = pi;
+
+  // 加载配置，初始化路径
+  const config = loadConfig();
+  _configDataDir = resolveDataDir(config);
+  PEERS_FILE = path.join(_configDataDir, "peers.json");
+  MAILBOX_DIR = path.join(_configDataDir, "mailbox");
 
   // fallback ID：立即用进程 PID 保证唯一（/peer-join 执行前 session_start 应已覆盖它）
   _peerId = `${os.hostname()}-${os.userInfo().username}-${process.pid}`;

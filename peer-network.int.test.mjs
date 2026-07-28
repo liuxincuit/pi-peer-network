@@ -13,7 +13,9 @@ const PI_BIN = process.platform === "win32"
   : "pi";
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "pi-peer-int-"));
-const REAL_PEERS = path.join(os.homedir(), ".pi", "peers.json");
+// 扩展现在使用 ~/.pi/pi-peer-network/setting.json 中的 dataDir 配置路径
+// 默认 dataDir 为 "~/.pi/pi-peer-network"，解析后 peers.json 路径如下：
+const REAL_PEERS = path.join(os.homedir(), ".pi", "pi-peer-network", "peers.json");
 
 let passed = 0;
 let failed = 0;
@@ -41,7 +43,7 @@ class RpcClient {
   async start() {
     return new Promise((resolve, reject) => {
       this.proc = spawn(
-        `"${PI_BIN}" --mode rpc --no-session --no-context-files`,
+        `"${PI_BIN}" --mode rpc --no-session --no-context-files --no-extensions --extension ./extensions/peer-network.ts`,
         [],
         {
           cwd: this.cwd,
